@@ -1,6 +1,8 @@
+setwd("D:/workspaces/@Git/VaDER_supporting_code")
+
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) == 0) {
-  N_PROC <- 2
+  N_PROC <- 1
   SEED <- 12345
   TIME_STAMP <- format(Sys.time(), "%Y%m%d%H%M%S")
 } else {
@@ -9,8 +11,9 @@ if (length(args) == 0) {
   TIME_STAMP <- as.character(args[3])
 }
 
-USE_PYTHON <- NULL # "/nmitapps/lib/python/anaconda/3.6/bin/python3.6"
-VADER_PATH <- file.path("..", "VaDER")
+USE_PYTHON <- "C:\\Software\\Anaconda3\\envs\\scai-p38-tf2\\python.exe"
+VADER_PATH <- file.path("..", "VaDER", "tensorflow2", "vader")
+DEBUG_OUT <- "@debug.out"
 PRINT_OUT <- "ADNI_hyperparameter_optimization.out"
 DIR_OUT <- file.path("..", "results", "ADNI", "vader", "hyperparameter_optimization", TIME_STAMP)
 F_OUT <- file.path(DIR_OUT, sprintf("grid_search_seed%i.RData", SEED))
@@ -19,14 +22,14 @@ DIR_IN <- file.path("..", "data", "ADNI")
 F_IN <- file.path("ADNI_artificial_data.RData")
 VARS <- c("ADAS13", "CDRSB", "MMSE", "FAQ")
 N_SAMPLE <- 1e4 # Inf; 100 takes 90 minutes using 3x100 cores
-N_PERM <- 1e3
+N_PERM <- 1
 PARAM_SEED <- 12345
 COMPUTE_PREDICTION_STRENGTH <- TRUE
 if (COMPUTE_PREDICTION_STRENGTH) {
   N_FOLD <- 2
   # test one model for different k
   PARAM_GRID <- list( 
-    k = 2:15,
+    k = 2:4,
     n_layer = 2,
     alpha = 1.0,
     n_node = c(32, 64),
@@ -63,6 +66,10 @@ if (file.exists(PRINT_OUT)) {
   file.remove(PRINT_OUT)
   file.create(PRINT_OUT)
 }
+if (file.exists(DEBUG_OUT)) {
+  file.remove(DEBUG_OUT)
+  file.create(DEBUG_OUT)
+}
 dir.create(DIR_OUT, recursive = TRUE)
 
 load_data <- function(f_in, vars) {
@@ -97,8 +104,10 @@ load_data <- function(f_in, vars) {
 	}
 }
 
-cross_validate <- function(params, data, weights, n_fold, n_perm, seed = NULL) {
-  # cat("begin cross_validate\n", file = "vader_hyperparameter_optimization.out", append = TRUE)
+cross_validate <- function(params, data, weights, n_fold, n_pem, seed = NULL) {
+  cat("\n=> cross_validate seed:", seed, file = "@debug.out", append = TRUE)
+  cat("\n=> cross_validate params:", file = "@debug.out", append = TRUE)
+  lapply(params, write, "@debug.out", append=TRUE, ncolumns=1000)
   if (!is.null(seed)) {
     set.seed(seed)
   }
@@ -168,7 +177,7 @@ cross_validate <- function(params, data, weights, n_fold, n_perm, seed = NULL) {
     
     vader <- VADER(
       X_train = data[-fold,,, drop = FALSE],
-      save_path = save_path,
+      save_path = NULL,
       n_hidden = n_hidden,
       k = as.integer(params$k),
       learning_rate = params$learning_rate,
@@ -206,7 +215,7 @@ cross_validate <- function(params, data, weights, n_fold, n_perm, seed = NULL) {
       
       vader <- VADER(
         X_train = data[fold,,, drop = FALSE],
-        save_path = save_path,
+        save_path = NULL,
         n_hidden = n_hidden,
         k = as.integer(params$k),
         learning_rate = params$learning_rate,
@@ -218,8 +227,8 @@ cross_validate <- function(params, data, weights, n_fold, n_perm, seed = NULL) {
         W_train = weights[fold,,, drop = FALSE],
         n_thread = 1L
       )
-      vader$pre_fit(n_epoch = as.integer(100), verbose = FALSE)
-      vader$fit(n_epoch = as.integer(100), verbose = FALSE)
+      vader$pre_fit(n_epoch = as.integer(10), verbose = FALSE)
+      vader$fit(n_epoch = as.integer(10), verbose = FALSE)
       y_true <- vader$cluster(
         data[fold,,, drop = FALSE], 
         weights[fold,,, drop = FALSE]
@@ -325,10 +334,10 @@ explore_grid <- function(
     }
   })
   cv_func <- function(i) {
-    if (is_first_iteration) {
-      Sys.sleep(10 * (i %% n_proc)) # to avoid high CPU loads simultaneously from all processes
-      is_first_iteration <- FALSE
-    }
+    #if (is_first_iteration) {
+    #  Sys.sleep(10 * (i %% n_proc)) # to avoid high CPU loads simultaneously from all processes
+    #  is_first_iteration <- FALSE
+    #}
     params <- paramspace[[i]]
     # # make sure each worker is seeded differently, but deterministically depends on the master thread
     # if (!is.null(seed)) { 
@@ -342,7 +351,7 @@ explore_grid <- function(
         i, length(paramspace), res["effective_k"],
         paste(sprintf("%s=%.4f", names(params), as.numeric(params)), collapse = "; ")
       ),
-      file = PRINT_OUT,
+      file = "@debug.out",
       append = TRUE
     )
     res
