@@ -59,7 +59,10 @@ library(reticulate)
 if (!is.null(USE_PYTHON)) {
   use_python(USE_PYTHON, required = TRUE)
 }
-file.remove(PRINT_OUT)
+if (file.exists(PRINT_OUT)) {
+  file.remove(PRINT_OUT)
+  file.create(PRINT_OUT)
+}
 dir.create(DIR_OUT, recursive = TRUE)
 
 load_data <- function(f_in, vars) {
