@@ -185,8 +185,8 @@ cross_validate <- function(params, data, weights, n_fold, n_perm, seed = NULL) {
     }
     test_loss <- vader$get_loss(data[fold,,, drop = FALSE], weights[fold,,, drop = FALSE])
     loss <- c(
-      vader$reconstruction_loss, 
-      vader$latent_loss, 
+      tail(vader$reconstruction_loss, n=1),
+      tail(vader$latent_loss, n=1),
       test_loss$reconstruction_loss, 
       test_loss$latent_loss
     )
