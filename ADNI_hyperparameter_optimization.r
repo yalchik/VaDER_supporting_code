@@ -2,7 +2,7 @@ args <- commandArgs(trailingOnly = TRUE)
 if (length(args) == 0) {
   N_PROC <- 2
   SEED <- 12345
-  TIME_STAMP <- system("date +'%Y%m%d%H%M%S'", intern = TRUE)
+  TIME_STAMP <- format(Sys.time(), "%Y%m%d%H%M%S")
 } else {
   N_PROC <- as.integer(args[1])
   SEED <- as.integer(args[2])
