@@ -2,7 +2,7 @@ args <- commandArgs(trailingOnly = TRUE)
 if (length(args) == 0) {
   N_PROC <- 2
   SEED <- 12345
-  TIME_STAMP <- format(Sys.time(), "%Y%m%d%H%M%S")
+  TIME_STAMP <- system("date +'%Y%m%d%H%M%S'", intern = TRUE)
 } else {
   N_PROC <- as.integer(args[1])
   SEED <- as.integer(args[2])
@@ -59,11 +59,7 @@ library(reticulate)
 if (!is.null(USE_PYTHON)) {
   use_python(USE_PYTHON, required = TRUE)
 }
-
-if (file.exists(PRINT_OUT)) {
-  file.remove(PRINT_OUT)
-  file.create(PRINT_OUT)
-}
+file.remove(PRINT_OUT)
 dir.create(DIR_OUT, recursive = TRUE)
 
 load_data <- function(f_in, vars) {
@@ -148,32 +144,32 @@ cross_validate <- function(params, data, weights, n_fold, n_perm, seed = NULL) {
       (sum(mpq[,ii]) - n_ii) / n_ii / (n - 1)
     }))
   }
-
+  
   VADER <- reticulate::import_from_path("vader", path = VADER_PATH)$VADER
-
+  
   # train the model
   folds <- caret::createFolds(1:nrow(data), n_fold)
   perf <- do.call("rbind", lapply(1:length(folds), function(i) {
     fold <- folds[[i]]
     save_dir <- file.path(
-      "temp",
+      "temp", 
       paste(sample(letters, 64, replace = TRUE), collapse = ""),
       gsub("-", "minus", paste(unlist(sapply(params, as.character)), collapse = "_"))
     )
     dir.create(save_dir, recursive = TRUE)
     # save path for VADER
     save_path <- file.path(save_dir, "vader.ckpt")
-
+    
     n_hidden <- lapply(params[grep("n_hidden", names(params))], as.integer)
     names(n_hidden) <- NULL
-
+    
     vader <- VADER(
       X_train = data[-fold,,, drop = FALSE],
       save_path = save_path,
       n_hidden = n_hidden,
       k = as.integer(params$k),
       learning_rate = params$learning_rate,
-      batch_size = as.integer(params$batch_size),
+      batch_size = as.integer(params$batch_size), 
       alpha = params$alpha,
       output_activation = NULL,
       seed = if (is.null(seed)) NULL else as.integer(seed),
@@ -186,15 +182,15 @@ cross_validate <- function(params, data, weights, n_fold, n_perm, seed = NULL) {
     }
     test_loss <- vader$get_loss(data[fold,,, drop = FALSE], weights[fold,,, drop = FALSE])
     loss <- c(
-      vader$reconstruction_loss,
-      vader$latent_loss,
-      test_loss$reconstruction_loss,
+      vader$reconstruction_loss, 
+      vader$latent_loss, 
+      test_loss$reconstruction_loss, 
       test_loss$latent_loss
     )
     names(loss) <- c(
-      "train_reconstruction_loss",
-      "train_latent_loss",
-      "test_reconstruction_loss",
+      "train_reconstruction_loss", 
+      "train_latent_loss", 
+      "test_reconstruction_loss", 
       "test_latent_loss"
     )
     if (COMPUTE_PREDICTION_STRENGTH) {
@@ -204,14 +200,14 @@ cross_validate <- function(params, data, weights, n_fold, n_perm, seed = NULL) {
         data[fold,,, drop = FALSE],
         weights[fold,,, drop = FALSE]
       )
-
+      
       vader <- VADER(
         X_train = data[fold,,, drop = FALSE],
         save_path = save_path,
         n_hidden = n_hidden,
         k = as.integer(params$k),
         learning_rate = params$learning_rate,
-        batch_size = as.integer(params$batch_size),
+        batch_size = as.integer(params$batch_size), 
         alpha = params$alpha,
         output_activation = NULL,
         seed = if (is.null(seed)) NULL else as.integer(seed),
@@ -222,10 +218,10 @@ cross_validate <- function(params, data, weights, n_fold, n_perm, seed = NULL) {
       vader$pre_fit(n_epoch = as.integer(100), verbose = FALSE)
       vader$fit(n_epoch = as.integer(100), verbose = FALSE)
       y_true <- vader$cluster(
-        data[fold,,, drop = FALSE],
+        data[fold,,, drop = FALSE], 
         weights[fold,,, drop = FALSE]
       )
-
+      
       arindex <- adj_rand_index(y_pred, y_true)
       rindex <- rand_index(y_pred, y_true)
       pstrength <- prediction_strength(y_pred, y_true)
@@ -238,13 +234,13 @@ cross_validate <- function(params, data, weights, n_fold, n_perm, seed = NULL) {
         )
       }))
       res <- c(
-        loss,
-        effective_k = effective_k,
-        rand_index = rindex,
+        loss, 
+        effective_k = effective_k, 
+        rand_index = rindex, 
         rand_index_null = mean(null[,"rindex"]),
-        adj_rand_index = arindex,
+        adj_rand_index = arindex, 
         adj_rand_index_null = mean(null[,"arindex"]),
-        prediction_strength = pstrength,
+        prediction_strength = pstrength, 
         prediction_strength_null = mean(null[,"pstrength"])
       )
     } else {
@@ -252,10 +248,10 @@ cross_validate <- function(params, data, weights, n_fold, n_perm, seed = NULL) {
     }
     # delete model-related files
     unlink(save_dir, recursive=TRUE)
-
+    
     res
   }))
-  perf
+  colMeans(perf)
 }
 
 explore_grid <- function(
@@ -269,7 +265,7 @@ explore_grid <- function(
   seed = NULL,
   param_seed = NULL
 ) {
-
+  
   nms <- names(param_grid)[names(param_grid) != "n_node"]
   paramspace <- data.table(expand.grid(param_grid[nms]))
   layer_configs <- lapply(param_grid$n_layer, function(n_layer) {
@@ -339,7 +335,7 @@ explore_grid <- function(
     res <- cross_validate(params, data, weights, n_fold, n_perm, seed = seed)
     cat(
       sprintf(
-        "%i of %i: \teffective_k=%s \t[%s]\n",
+        "%i of %i: \teffective_k=%.2g \t[%s]\n",
         i, length(paramspace), res["effective_k"],
         paste(sprintf("%s=%.4f", names(params), as.numeric(params)), collapse = "; ")
       ),
@@ -348,7 +344,7 @@ explore_grid <- function(
     )
     res
   }
-  environment(cv_func) <- .GlobalEnv
+  environment(cv_func) <- .GlobalEnv 
   perf <- do.call("rbind", clusterApplyLB(cl, 1:length(paramspace), cv_func))
   stopCluster(cl)
   paramspace <- do.call("rbind", c(lapply(paramspace, function(params) {
@@ -356,8 +352,6 @@ explore_grid <- function(
   }), fill = TRUE))
   dt <- data.table(cbind(paramspace, perf))
   setorderv(dt, cols = colnames(dt)[1:tail(grep("n_hidden", colnames(dt)), 1)])
-  
-  dt
 }
 
 L <- load_data(f_in = F_IN, vars = VARS)
